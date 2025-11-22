@@ -44,14 +44,15 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 2. For ⧉ **arranging desktop windows** from within emacs, add to your `init.el`:
    ```emacs-lisp
 	(use-package dwin
-		:straight (dwin :type git :repo "https://github.com/lsth/dwin.git"))
+		:straight (dwin :type git :repo "https://github.com/lsth/dwin.git")
+		:config
+		(dwin-setup))
 	```
 	Then with `M-x dwin-grab` you can grab any desktop window and resize and reposition it. 
 
 3. For 🔀 **directional navigation**, add to `use-package`:
    ```emacs-lisp
 		:config
-		(dwin-setup)
 		(global-set-key (kbd "M-<left>") #'dwin-windmove-left)
 		(global-set-key (kbd "M-<right>") #'dwin-windmove-right)
 		(global-set-key (kbd "M-<up>") #'dwin-windmove-up)
@@ -73,7 +74,7 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 	Then with `M-<left>/<right>/<up>/<down>` you can move between Emacs windows and between
 	desktop windows seamlessly.
 
-4. For basic 🏷️ **named navigation**, add:
+4. For basic 🏷️ **named navigation**, add to `use-package`:
    ```emacs-lisp
        :config
 	   (global-set-key (kbd "C-<f11>") #'dwin-switch-to-emacs-or)
@@ -107,7 +108,7 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 | `D<number>` | move window to desktop                        |
 | `q`         | quit                                          |
 
-2. For **toggling** 🏷️ **named navigation** with a single key, add:
+2. For **toggling** 🏷️ **named navigation** with a single key, add to `use-package`:
    ```emacs-lisp
        :config
 	   (defun my/firefox (&optional prefix)

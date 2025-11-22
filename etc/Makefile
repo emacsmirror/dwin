@@ -26,3 +26,8 @@ dev-emacs:
 
 # beware: emacs --batch implies -q, so --init-directory is useless.
 # - either use --batch -l ...  or [not --batch] --init-directory.
+
+
+.PHONY: preview
+preview:
+	cd .. && go-grip -p 8100 README.md
