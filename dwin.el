@@ -6,6 +6,7 @@
 ;; Package-Requires: ((emacs "30.2"))
 ;; Keywords: frames, processes, convenience
 ;; URL: https://github.com/lsth/dwin
+;; SPDX-License-Identifier: GPL-3.0-or-later
 ;;
 ;;; Commentary:
 ;;
