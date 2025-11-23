@@ -2,7 +2,7 @@
 ;;
 ;; Author: Lars Schmidt-Thieme <schmidt-thieme@ismll.de>
 ;; Maintainer: Lars Schmidt-Thieme <schmidt-thieme@ismll.de>
-;; Version: 0.1
+;; Version: 0.1.1
 ;; Package-Requires: ((emacs "30.2"))
 ;; Keywords: frames, processes, convenience
 ;; URL: https://github.com/lsth/dwin
