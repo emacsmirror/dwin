@@ -21,7 +21,7 @@
 ;; the window manager forwards some keys globally to Emacs;
 ;; for KDE one can bind a one-line script that uses Emacsclient
 ;; to forward the key to Emacs, using `dwin-input-key' defined in
-;; sect.  1. See etc/bin/dwin-firefox for an example.  See
+;; sect.  3. See etc/bin/dwin-firefox for an example.  See
 ;; Further Details / 1 for why we do not use tools like qdotool for
 ;; sending keys.
 ;;
@@ -36,7 +36,7 @@
 ;; i) dbus calls to org.kde.kglobalaccel (KDE's shortcuts
 ;;    application), esp.  for directional navigation, and
 ;; ii) kdotool for navigation by name.
-;; See sect.  2 below.
+;; See sect. 4 below.
 ;;
 ;; 🏷️ Navigation by name is provided by `dwin-switch-to-app' that will
 ;; i) start an app, if it has no window yet,
@@ -54,16 +54,16 @@
 ;; By default, navigation by name will switch to the first window of
 ;; an application, if it has several.  You can use a prefix arg to
 ;; switch to a specific one, e.g., C-2 M-x my/firefox or C-2 <f11> to
-;; switch to the second one.  See sect.  3 below.
+;; switch to the second one.  See sect. 5 below.
 ;;
 ;; For 🔀 directional navigation, we defined a short function
 ;; `dwin-windmove-left' for each direction.  The function tries to
 ;; move inside Emacs via windmove, and if this fails, uses the
 ;; window manager to move out of Emacs.
 ;; The same method also uses the window manager to move
-;; directional from desktop windows.  See sect.  4.
+;; directional from desktop windows.  See sect.  6.
 ;;
-;; Sect.  5 contains function `dwin-grab' to ⧉ arrange desktop
+;; Sect.  7 contains function `dwin-grab' to ⧉ arrange desktop
 ;; windows, i.e., to resize them, reposition them etc.
 ;;
 ;; See etc/example-emacs-init/init.el for an example configuration.
@@ -104,14 +104,13 @@
 ;;    This never happened when sending the same events from Emacs.
 
 ;;; Code:
-;;_ 0a. requirements
+;;_ 0. required packages
 (require 'dbus)
+(require 'cl-lib)
 
-;;_ 0b. some customization
-
+;;_ 1. some customization
 (defgroup dwin nil
-  "Customization options for the desktop window manager (dwin)
-package."
+  "Customization options for the desktop window manager (dwin) package."
   :group 'applications  ;; optional: parent group
   :prefix "dwin-")      ;; optional: used for variables/functions
 
@@ -145,13 +144,106 @@ package."
   :type 'boolean
   :group 'dwin)
 
+;;_ 2. some prerequisites / utilities
+;;_ 2.1 simple alist objects
+(defun dwin-get (obj attr)
+  "Get attribute ATTR (a symbol) of OBJ (an alist object)."
+  (let ((ref-cons (assoc attr obj)))
+    (if ref-cons
+        (cdr ref-cons)
+      (error "Attribute/method '%s' not found in obj '%s'" attr obj))))
 
+(defun dwin-set (obj attr val)
+  "Set attribute ATTR (a symbol) of OBJ (an alist object) to value VAL."
+  (let ((ref-cons (assoc attr obj)))
+    (if ref-cons
+	(setcdr ref-cons val)
+      (error "Attribute/method '%s' not found in obj '%s'" attr obj))))
+
+(defun dwin-call (obj method &rest args)
+  "Call METHOD (a symbol) on OBJ (an alist object).
+ARGS are passed as arguments to the method function."
+  (let ((fn (dwin-get obj method)))
+    (apply fn args)))
+
+(defun dwin-call-apply (obj method args)
+  "Call METHOD (a symbol) on OBJ (an alist object).
+ARGS is a list of arguments provided to the function.
+This is different from `dwin-call' where args can be
+several arguments that are then captured by a list.
+See the following example that one cannot implement
+with `dwin-call' (without changing lines 1+2), but
+with `dwin-call-apply'.
+Example:
+    (let* ((x (list (cons \='fun (lambda(&rest args) (apply \='+ args)))))
+           (values1 (list 1 2 3)))
+      (dwin-call-apply x \='fun (append values1 (list 4 5)))) ;; 15"
+  (let ((fn (dwin-get obj method)))
+    (apply fn args)))
+
+(defun dwin-extend (self extensions)
+  "Update object SELF with new attributes and functions EXTENSIONS (an alist).
+If an attribute or a method exists, overwrite it (using `dwin-set').
+If an attribute or a method does not exist yet, define it (appending to SELF).
+This function operates in place and will mutate SELF.
+Better than using `dwin-set' directly, because it also will work for new
+attributes and functions."
+  (dolist (pair extensions)
+    (let ((key (car pair))
+          (val (cdr pair)))
+      (let ((cell (assoc key self)))
+        (if cell
+	    ;; a. attribute/method exists: update
+            (dwin-set self key val)
+          ;; b. new attribute/method: append
+          (nconc self (list pair))))))
+  self)
+
+(defalias 'dwin-method #'dwin-get
+ "Alias for `dwin-get'. Obsolete. Use `dwin-get' directly.")
+(make-obsolete 'dwin-method 'dwin-get "0.1.2")
+
+;;_ 2.2 logging
 (defun dwin-message (format &rest args)
   "Send a `message' with FORMAT and ARGS, unless `dwin-be-quiet' is true."
   (unless dwin-be-quiet
     (apply #'message format args)))
 
-;;_ 1. input keys programatically (e.g., from emacsclient)
+;;_ 2.3 functions on basic data structures
+(defun dwin-collect (lst pred)
+  "Return a sublist of LST of all elements x for which (PRED x) is t."
+  (cl-loop for x in lst
+           for r = (funcall pred x)
+           when r collect x))
+
+(defun dwin-range (a &optional b step)
+  "Return a list of integers in a given range.
+If only A is given, return integers from 0 to A-1.
+If only A and B are given, return integers from A to B-1.
+If A, B, and STEP are given, return integers from A to B-1 in steps of STEP."
+  (let* ((start (if b a 0))
+	 (end (if b b a))
+	 (step (or step 1)))
+    (cl-loop for i from start below end by step
+             collect i)))
+
+(defun dwin-argmin (lst pred)
+  "Find the index of the element in LST for which PRED returns the smallest value."
+  (cl-loop with best-idx = 0
+	   with best-val = (funcall pred (nth 0 lst))
+	   for x in (cdr lst)
+	   for i from 1
+           for val = (funcall pred x)
+           when (< val best-val)
+	   do (setq best-idx i
+		    best-val val)
+	   finally return best-idx))
+
+(defun dwin-argmax (lst pred)
+  "Find the index of the element in LST for which PRED returns the largest value."
+  (dwin-argmin lst (lambda (x) (- (funcall pred x)))))
+
+;;_ 3. input keys programatically (e.g., from emacsclient)
 ;;;###autoload
 (defun dwin-input-key (key)
   "Input KEY as if typed by the user.
@@ -186,7 +278,281 @@ package."
 	  (command-execute cmd nil key-vector)
 	(message "no key binding for %s." key) ))))
 
-;;_ 2. window manager proxy, here for KDE/KWin
+;;_ 4. window manager proxy, here for KDE/KWin
+;; we define three object constructors for window manager proxies:
+;; 1. proxy-dotool-based: to pool all methods common for xdotool and kdotool.
+;; 2. proxy-x11-generic: to talk to x11 via xdotool, not to any wm specifically.
+;; 3. proxy-kwin: to talk to kwin via kdotool and dbus.
+
+;;_ 4.1 common wm proxy methods for dotool based interaction (xdotool, kdotool)
+(defun dwin--next-window-in-direction (proxy direction &optional window)
+  "Get the next window from WINDOW in DIRECTION.
+DIRECTION can be \='left, \='right, \='up or \='down.
+If WINDOW is missing, the active window is taken as starting point.
+PROXY is the window manager proxy.
+TODO: break ties."
+  (let* ((win-start (or window (dwin-call proxy 'getactivewindow)))
+	 (desktop (dwin-call proxy 'get_desktop_for_window win-start))
+	 (wins (remove win-start
+		       (dwin-call proxy 'search "--desktop" (format "%s" desktop) "")))
+	 (geom-start (dwin-call proxy 'getwindowgeometry win-start))
+	 (geoms (mapcar (lambda (win) (dwin-call proxy 'getwindowgeometry win)) wins))
+	 ;;
+	 (pred-filter (pcase direction
+			(`left  (lambda (idx) (< (nth 0 (nth idx geoms)) (nth 0 geom-start))))
+			(`right (lambda (idx) (> (nth 0 (nth idx geoms)) (nth 0 geom-start))))
+			(`up    (lambda (idx) (< (nth 1 (nth idx geoms)) (nth 1 geom-start))))
+			(`down  (lambda (idx) (> (nth 1 (nth idx geoms)) (nth 1 geom-start))))))
+	 (pred-score (pcase direction
+		       (`left  (lambda (idx) (- (nth 0 (nth idx geoms)))))
+		       (`right (lambda (idx) (nth 0 (nth idx geoms))))
+		       (`up    (lambda (idx) (- (nth 1 (nth idx geoms)))))
+		       (`down  (lambda (idx) (nth 1 (nth idx geoms))))))
+	 (indices-qual (dwin-collect (dwin-range (length wins)) pred-filter))
+	 (index-best   (when indices-qual (dwin-argmin indices-qual pred-score))) )
+    (when index-best (nth index-best wins))))
+
+(defun dwin--switch-direction (proxy direction)
+  "Switch from active window in DIRECTION using PROXY."
+  (let ((win (dwin--next-window-in-direction proxy direction)))
+    (when win
+      (dwin-call proxy 'windowactivate win))))
+
+
+(defun dwin--new-proxy-dotool-based ()
+  "Create new (abstract) base object for dotool based proxies."
+  (let ((self nil))  ;; forward reference for self
+    (setq self
+           (list
+	    ;; private attributes
+	    (cons '_class "proxy-dotool-based")
+	    (cons 'dotool-name "xdotool")
+	    ;; private methods:
+	    ;; yields a list of lines
+            (cons 'dotool (lambda (&rest args)
+                            (condition-case err
+				(apply #'process-lines
+				       (dwin-get self 'dotool-name) args)
+			      (error (message "%s error: %s"
+					      (dwin-get self 'dotool-name)
+					      err)))))
+	    ;; public methods:
+            (cons 'switch-left  (lambda () (dwin--switch-direction self 'left)))
+            (cons 'switch-right (lambda () (dwin--switch-direction self 'right)))
+            (cons 'switch-up    (lambda () (dwin--switch-direction self 'up)))
+            (cons 'switch-down  (lambda () (dwin--switch-direction self 'down)))
+            (cons 'getactivewindow (lambda ()
+				     (let ((wins (dwin-call self
+							    'dotool
+							    "getactivewindow")))
+				       (when wins
+					 (nth 0 wins))))) ; there is always only one active window.
+            (cons 'get_desktop (lambda ()
+				 (let ((output (dwin-call self 'dotool "get_desktop")))
+				   (when output
+				     (string-to-number (nth 0 output))))))
+            (cons 'search (lambda (&rest query-args) (dwin-call-apply
+						      self 'dotool
+						      (append (list "search") query-args) )))
+            (cons 'search-class (lambda (class) (dwin-call self 'dotool
+							   "search"
+							   "--class"
+							   class)))
+            (cons 'search-pid (lambda (pid) (dwin-call self 'dotool
+						       "search" ;; "--all"
+						       "--pid"
+						       (format "%s" pid) )))
+            (cons 'getwindowname (lambda (id) (dwin-call
+					       self 'dotool
+					       "getwindowname" id)))
+            (cons 'getwindowgeometry (lambda (id)
+				       (let ((lines (dwin-call
+						     self 'dotool
+						     "getwindowgeometry"
+						     id)))
+					 (mapcar #'string-to-number
+						 (append
+						  (split-string
+						   (string-trim
+						    (replace-regexp-in-string
+						     "Position: " ""
+						     (nth 1 lines)))
+						   "," t)
+						  (split-string
+						   (string-trim
+						    (replace-regexp-in-string
+						     "Geometry: " ""
+						     (nth 2 lines)))
+						   "x" t))))))
+            (cons 'windowactivate (lambda (id) (dwin-call
+						self 'dotool
+						"windowactivate" id)))
+            (cons 'windowclose (lambda (id) (dwin-call self 'dotool
+						       "windowclose" id)))
+            (cons 'windowminimize (lambda (id) (dwin-call
+						self 'dotool
+						"windowminimize" id)))
+            (cons 'windowraise (lambda (id) (dwin-call
+					     self 'dotool
+					     "windowraise" id)))
+            (cons 'windowsize (lambda (id width height) (dwin-call
+							 self 'dotool
+							 "windowsize" id
+							 (format "%s" width)
+							 (format "%s" height))))
+            (cons 'windowmove (lambda (id x y &optional relative)
+				(if relative
+				    (dwin-call self 'dotool
+					       "windowmove" "--relative"
+					       id (format "%s" x)
+					       (format "%s" y))
+				  (dwin-call self 'dotool "windowmove" id
+					     (format "%s" x) (format "%s" y)))))
+            ;; (cons 'windowstate (lambda (id) (dwin-call self 'dotool
+	    ;;   "windowstate" id))) ; --add/remove/toggle <property>
+            (cons 'get_desktop_for_window (lambda (id)
+					    (string-to-number (nth 0
+					     (dwin-call self 'dotool
+							"get_desktop_for_window"
+							(format "%s" id))))))
+            (cons 'set_desktop_for_window (lambda (id number)
+					    (dwin-call self 'dotool
+						       "set_desktop_for_window"
+						       (format "%s" id)
+						       (format "%s" number))))
+            (cons 'set_desktop (lambda (number &optional relative)
+				 (if relative
+				     (dwin-call self 'dotool
+						"set_desktop" "--relative"
+						(format "%s" number))
+				   (dwin-call self 'dotool "set_desktop"
+					      (format "%s" number))))) ))
+    self))
+
+;;_ 4.2 wm proxy for X11 generic (xdotool)
+(defun dwin-x11--window-type (window property)
+"Get X11 PROPERTY of WINDOW."
+(let* ((cmd (format "xprop -id %s %s" window property))
+       (output (shell-command-to-string cmd))
+       (value (when (string-match "\\([^=]+\\) = \\(.*\\)" output)
+		(match-string 2 output))))
+  value))
+
+(defun dwin-x11--window-normalp (window)
+  "Check if X11 WINDOW is of type normal."
+  (string= (dwin-x11--window-type window "_NET_WM_WINDOW_TYPE")
+	   "_NET_WM_WINDOW_TYPE_NORMAL"))
+
+(defun dwin--new-proxy-x11-generic ()
+  "Create new X11 proxy object."
+  (let ((self (dwin--new-proxy-dotool-based)))  ;; despite origin from X11, will also work with Wayland/KDE.
+    ;; further methods:
+    (dwin-extend self
+	 (list
+	  ;; overwrite attributes (new values)
+	  (cons '_class "proxy-x11-generic")
+	  ;; private methods
+	  ;; xdotool signals exitcode 1 on empty search results. avoid propagating an error.
+	  (cons 'dotool (lambda (&rest args)
+			  (let ((exitcode))
+                            (condition-case err
+				(let*
+				    ((lines (apply #'process-lines-handling-status
+						   (dwin-get self 'dotool-name)
+						   (lambda (status) (setq exitcode status))
+						   args)))
+				  (if (or (zerop exitcode)
+					  (null lines)) ; also OK if not output (empty search results)
+				      lines
+				    (error (message "exit code %s and output %s"
+						    exitcode
+						    (string-join lines)))) )
+			      (error (message "%s error: %s"
+					      (dwin-get self 'dotool-name)
+					      err))))))
+	  ;; xdotool returns x11 windows of all types (normal, tooltip etc.).
+	  ;; Usually we need only the normal ones.
+	  ;; Filter windows to retain just the normal ones.
+	  ;; TODO: when overwriting methods, keep the overwritten ones and call them here.
+	  ;; TODO: also add the filtered version of search-class and search.
+	  (cons 'search-filter #'dwin-x11--window-normalp)
+	  (cons 'search-pid (lambda (pid &optional pred)
+			      "Get all X11 windows for given PID that fulfill PRED."
+			      (let* ((pred (or pred (dwin-get self 'search-filter)))
+				     (wins (dwin-call self 'dotool
+						      "search"  ;;  "--all"
+						      "--pid"
+						      (format "%s" pid) )))
+				(dwin-collect wins pred))))
+	  (cons 'search-class (lambda (class &optional pred)
+				"Get all X11 windows of a given CLASS that fulfill PRED."
+				(let* ((pred (or pred (dwin-get self 'search-filter)))
+				       (wins (dwin-call self 'dotool
+							"search" "--class" class)))
+				  (dwin-collect wins pred))))
+	  ;; = super.search: (as &rest args and &optional pred cannot be combined)
+	  (cons 'search-unfiltered (lambda (&rest query-args)
+			  "Get all X11 windows matching query formulated by QUERY-ARGS.
+Does yield all windows without applying any filters."
+			   (dwin-call-apply self 'dotool
+					    (append (list "search") query-args) )))
+	  (cons 'search (lambda (&rest query-args)
+			  "Get all X11 windows matching query formulated by QUERY-ARGS.
+Filters using `search-filter'."
+			  (let* ((pred (dwin-get self 'search-filter))
+				 (wins (dwin-call-apply self 'search-unfiltered query-args)))
+			    (dwin-collect wins pred)))) ))))
+
+
+;;_ 4.3 wm proxy for KDE/KWin (kdotool)
+(defun dwin--new-proxy-kwin ()
+  "Create new KWin proxy object with directional window-switching methods."
+  (let ((self (dwin--new-proxy-dotool-based)))
+    ;; further methods:
+    (dwin-extend self
+	 (list
+	  ;; overwrite attributes (new values)
+	  (cons '_class "proxy-kwin")
+	  (cons 'dotool-name "kdotool")
+	  ;; private methods:
+	  ;; kdotool does not signal errors on empty search results. simplify dotool method:
+	  (cons 'invoke-shortcut (lambda (name)
+				   (condition-case err
+				       (dbus-call-method
+					:session
+					"org.kde.kglobalaccel"
+					"/component/kwin"
+					"org.kde.kglobalaccel.Component"
+					"invokeShortcut"
+					name)
+				     (error (message
+					     "KWin D-Bus error: %s"
+					     err)))))
+	  ;; public methods:
+	  ;; "kdotool search --pid <pid>" throws odd error "Error: missing argument for option '--pid'"
+	  ;; search for two properties (--all) with an empty condition ("") for the 2nd one works.
+          (cons 'search-pid (lambda (pid) (dwin-call self 'dotool
+						     "search" "--all"
+						     "--pid" (format "%s" pid)
+						     "")))
+	  (cons 'switch-left  (lambda () (dwin-call self
+						    'invoke-shortcut
+						    "Switch Window Left")))
+	  (cons 'switch-right (lambda () (dwin-call self
+						    'invoke-shortcut
+						    "Switch Window Right")))
+	  (cons 'switch-up    (lambda () (dwin-call self
+						    'invoke-shortcut
+						    "Switch Window Up")))
+	  (cons 'switch-down  (lambda () (dwin-call self
+						    'invoke-shortcut
+						    "Switch Window Down"))) ))
+    self))
+
+;;_ 4.4 setting up the wm proxy
+(defvar dwin-proxy nil
+  "Proxy object for the current window manager.")
+
 (defun dwin-get-window-manager ()
   "Return the name of the current window manager.
 Detects KWin via D-Bus, EXWM if running under Emacs,
@@ -208,130 +574,10 @@ otherwise returns \"unknown\"."
                                        "ListNames"))
            (error nil)))
     "kwin")
+   ((string= (getenv "XDG_SESSION_TYPE") "x11")
+    "X11-generic")
    ;; fallback
    (t "unknown")))
-
-(defun dwin-setup--kwin ()
-  "Return a KWin proxy object with directional window-switching methods."
-  (let ((self nil))  ;; forward reference for self
-    (setq self
-          `(;; private methods:
-	    (invoke-shortcut . ,(lambda (name)
-                                  (condition-case err
-                                      (dbus-call-method
-                                       :session
-                                       "org.kde.kglobalaccel"
-                                       "/component/kwin"
-                                       "org.kde.kglobalaccel.Component"
-                                       "invokeShortcut"
-                                       name)
-                                    (error (message
-					    "KWin D-Bus error: %s"
-					    err)))))
-	    ;; yields a list of lines
-            (kdotool . ,(lambda (&rest args)
-			  ;; (message "args=%s" (prin1-to-string args))
-                          (condition-case err
-                              (apply #'process-lines "kdotool" args)
-                            (error (message "kdotool error: %s" err)))))
-	    ;; public methods:
-            (switch-left  . ,(lambda () (dwin-call self
-						   'invoke-shortcut
-						   "Switch Window Left")))
-            (switch-right . ,(lambda () (dwin-call self
-						   'invoke-shortcut
-						   "Switch Window Right")))
-            (switch-up    . ,(lambda () (dwin-call self
-						   'invoke-shortcut
-						   "Switch Window Up")))
-            (switch-down  . ,(lambda () (dwin-call self
-						   'invoke-shortcut
-						   "Switch Window Down")))
-            (getactivewindow . ,(lambda ()
-				  (let ((wins (dwin-call self
-							 'kdotool
-							 "getactivewindow")))
-				    (when wins
-				      (nth 0 wins))))) ; there is always only one active window.
-            (search . ,(lambda (&rest query-args) (dwin-call
-						   self
-						   'kdotool
-						   "search"
-						   query-args)))
-            (search-class . ,(lambda (class) (dwin-call self 'kdotool
-							"search"
-							"--class"
-							class)))
-	    ;; the "" is odd in the call below, but required.
-            (search-pid . ,(lambda (pid) (dwin-call self 'kdotool
-						    "search" "--all"
-						    "--pid"
-						    (format "%s" pid)
-						    "")))
-            (getwindowname . ,(lambda (id) (dwin-call
-					    self 'kdotool
-					    "getwindowname" id)))
-            (getwindowgeometry . ,(lambda (id)
-				    (let ((lines (dwin-call
-						  self 'kdotool
-						  "getwindowgeometry"
-						  id)))
-				      (mapcar #'string-to-number
-					      (append
-					       (split-string
-						(string-trim
-						 (replace-regexp-in-string
-						  "Position: " ""
-						  (nth 1 lines)))
-						"," t)
-					       (split-string
-						(string-trim
-						 (replace-regexp-in-string
-						  "Geometry: " ""
-						  (nth 2 lines)))
-						"x" t))))))
-            (windowactivate . ,(lambda (id) (dwin-call
-					     self 'kdotool
-					     "windowactivate" id)))
-            (windowclose . ,(lambda (id) (dwin-call self 'kdotool
-						    "windowclose" id)))
-            (windowminimize . ,(lambda (id) (dwin-call
-					     self 'kdotool
-					     "windowminimize" id)))
-            (windowraise . ,(lambda (id) (dwin-call
-					  self 'kdotool
-					  "windowraise" id)))
-            (windowsize . ,(lambda (id width height) (dwin-call
-						      self 'kdotool
-						      "windowsize" id
-						      (format "%s" width)
-						      (format "%s" height))))
-            (windowmove . ,(lambda (id x y &optional relative)
-			     (if relative
-				 (dwin-call self 'kdotool
-					    "windowmove" "--relative"
-					    id (format "%s" x)
-					    (format "%s" y))
-			       (dwin-call self 'kdotool "windowmove" id
-					(format "%s" x) (format "%s" y)))))
-            ;; (windowstate . ,(lambda (id) (dwin-call self 'kdotool
-	    ;;   "windowstate" id))) ; --add/remove/toggle <property>
-            (set_desktop_for_window . ,(lambda (id number)
-					 (dwin-call self 'kdotool
-						    "set_desktop_for_window"
-						    (format "%s" id)
-						    (format "%s" number))))
-            (set_desktop . ,(lambda (number &optional relative)
-			      (if relative
-				  (dwin-call self 'kdotool
-					     "set_desktop" "--relative"
-					     (format "%s" number))
-				(dwin-call self 'kdotool "set_desktop"
-					   (format "%s" number))))) ))
-    self))
-
-(defvar dwin-proxy nil
-  "Proxy object for the current window manager.")
 
 ;;;###autoload
 (defun dwin-setup ()
@@ -340,31 +586,20 @@ Create a proxy object to interact with the current window manager.
 The object is stored in `dwin-proxy'."
   (let ((wm (dwin-get-window-manager)))
     (pcase wm
-      ("kwin" (setq dwin-proxy (dwin-setup--kwin)))
+      ("kwin" (setq dwin-proxy (dwin--new-proxy-kwin)))
+      ("x11-generic" (setq dwin-proxy (dwin--new-proxy-x11-generic)))
       (_ (progn
 	   (setq dwin-proxy nil)
 	   (message "no proxy for window manager '%s'." wm) )))))
 
-(defun dwin-call (obj method &rest args)
-  "Call METHOD (a symbol) on OBJ (an alist object).
-ARGS are passed as arguments to the method function."
-  (let ((fn (cdr (assoc method obj))))
-    (if fn
-        (apply fn args)
-      (error "Method '%s' not found in obj '%s'" method obj))))
-
-(defun dwin-method (obj method)
-  "Get METHOD (a symbol) on OBJ (an alist object) as function."
-  (cdr (assoc method obj)))
-
-
+;;_ 4.5 convenience functions using the setup wm proxy
 (defun dwin-switch-to-desktop (number &optional relative)
   "Switch to desktop NUMBER.
 If RELATIVE is t, switch relative to the current desktop."
   (dwin-call dwin-proxy 'set_desktop number relative))
 
 
-;;_ 3. navigation by name
+;;_ 5. navigation by name
 (defvar dwin-process-per-app (make-hash-table :test 'equal)
   "Keep track of processes of apps started from within Emacs.
 This deliberately does not cover processes started outside Emacs.
@@ -543,7 +778,7 @@ The later function can be customized in
       (select-frame-set-input-focus (selected-frame))
     (call-interactively dwin-switch-to-emacs-function)))
 
-;;_ 4. directional navigation
+;;_ 6. directional navigation
 (defun dwin-windmove--move (move-emacs wm-cmd)
   "Move to a window in a direction.
 First checks for Emacs window via function MOVE-EMACS.
@@ -590,7 +825,7 @@ Then tries X windows via `dwin-proxy'/switch-down."
   (dwin-windmove--move #'windmove-down 'switch-down))
 
 
-;;_ 5. arrange windows
+;;_ 7. arrange windows
 (defun dwin-resize (window width height &optional relative)
   "Set WINDOW to a new size WIDTH and HEIGHT.
 If RELATIVE is t, make the new size relative to the old one."
@@ -603,7 +838,7 @@ If RELATIVE is t, make the new size relative to the old one."
 (defun dwin--window-names ()
   "Get a list of all windows as (id . name) pairs (cons cells)."
   (let* ((wins (dwin-call dwin-proxy 'search-class ""))
-	 (names (mapcar (dwin-method dwin-proxy 'getwindowname) wins))
+	 (names (mapcar (dwin-get dwin-proxy 'getwindowname) wins))
 	 (names-with-ids (cl-mapcar (lambda (a b)
 				      (format "%s (%s)" a b))
 				    names wins))

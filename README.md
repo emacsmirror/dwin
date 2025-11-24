@@ -18,8 +18,10 @@ KDE's KWin,
 <li>⧉ reposition and resize desktop windows with keys from within emacs
    instead of with the mouse.</li>
 </ul>
-Currently works for KDE's KWin under Wayland and X11.
-It should not be difficult to extend it to other window managers or
+Currently works for 
+  any/most X11 window managers as well as for 
+  KDE's KWin, both under Wayland and X11.
+It should not be too difficult to extend it to other window managers or
 compositors.
 </p>
 <hr>
@@ -34,10 +36,14 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 	   (server-start))
 	```
 	Also make sure:
-    - your are running KDE/KWin under Wayland or X11. 
+    - your are running 
+	  - X11 --- any window manager compatible with [xdotool](https://github.com/jordansissel/xdotool) should do, or 
+	  - KDE/KWin, either under Wayland or X11. 
     - `emacsclient` is installed
 	   <br/>--- otherwise install via your Linux package manager,
-	- `kdotool` is installed 
+	- for X11 window managers, [xdotool](https://github.com/jordansissel/xdotool) is installed,
+	  <br/>--- can be installed with your package manager,
+	- for KDE/KWin, [kdotool](https://github.com/jinliu/kdotool) is installed 
 	   <br/>--- can be installed via `cargo install kdotool`, 
 	   if cargo and rust is installed; rust and cargo you can install via your Linux
  	   package manager.
@@ -50,6 +56,9 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 	```
 	Then with `M-x dwin-grab` you can grab any desktop window and resize and reposition it. 
 
+	For X11 there are some irrelevant windows; see <a href="#limit:irrelevant-windows">Known Issues 2</a>.
+	There should be no such issue with KDE/KWin.
+
 3. For 🔀 **directional navigation**, add to `use-package`:
    ```emacs-lisp
 		:config
@@ -58,18 +67,21 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 		(global-set-key (kbd "M-<up>") #'dwin-windmove-up)
 		(global-set-key (kbd "M-<down>") #'dwin-windmove-down))
 	```
-	In ⚙️ KDE/System Settings/Shortcuts you have to add shortcut keys manually
+	In your window manager's shortcut settings, you have to configure the following global shortcuts: 
 	- `Alt-left` to `etc/bin/dwin-left`, 
 	- `Alt-right` to `etc/bin/dwin-right`, 
 	- `Alt-up` to `etc/bin/dwin-up`, and 
 	- `Alt-down` to `etc/bin/dwin-down`.
     	
-    (alternatively, you can 
-    - copy the contents of [etc/_config/kglobalshortcutsrc](etc/_config/kglobalshortcutsrc) at the end
-      of your `~/.config/kglobalshortcutsrc` and
-    - the files [etc/_local-share-applications/*.desktop](etc/_local-share-applications/) into your
-      `~/.local/share/applications` and then
-    - ask kwin to reload its config: `qdbus6 org.kde.KWin /KWin reconfigure`.)
+	For KDE/KWin you can do this in ⚙️ KDE/System Settings/Shortcuts manually
+
+	(alternatively, you can
+	
+	- copy the contents of [etc/_config/kglobalshortcutsrc](etc/_config/kglobalshortcutsrc) at the end
+	  of your `~/.config/kglobalshortcutsrc` and
+	- the files [etc/_local-share-applications/*.desktop](etc/_local-share-applications/) into your
+	  `~/.local/share/applications` and then
+	- ask kwin to reload its config: `qdbus6 org.kde.KWin /KWin reconfigure`.)
 
     Also ensure that [_emacs-key](etc/bin/_emacs-key) is on your PATH, e.g.,
 	by copying it to `~/bin` or `~/.local/bin` (if in your PATH).
@@ -82,7 +94,8 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
        :config
 	   (global-set-key (kbd "C-<f11>") #'dwin-switch-to-emacs-or)
    ```
-   In ⚙️ KDE/System Settings/Shortcuts you have to add the shortcut key 
+   In your window manager's shortcut settings, e.g., 
+   in ⚙️ KDE/System Settings/Shortcuts you have to add the shortcut key 
    - `Ctrl-f11` to `etc/bin/dwin-emacs`, 
    
    Then with `<f11>` you can switch from emacs to firefox and 
@@ -124,7 +137,8 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 		   (dwin-switch-to-app "zotero" prefix))
 	   (global-set-key (kbd "M-<f11>") #'my/zotero)
    ```
-   In ⚙️ KDE/System Settings/Shortcuts you have to add shortcut keys 
+   In your window manager's shortcut settings, e.g., 
+   in ⚙️ KDE/System Settings/Shortcuts you have to add shortcut keys 
    - `f11` to `etc/bin/dwin-firefox`, and 
    - `Alt-f11` to `etc/bin/dwin-zotero`.
    
@@ -169,15 +183,25 @@ to implement window navigation globally. We captured all required
 methods in a window manager proxy object `dwin-proxy` whose
 methods can be called via `dwin-call`. The proxy has to be created
 once before use, e.g., during emacs initialization, using
-`dwin-setup`. Currently only a proxy for KDE is implemented.
-But it should be possible to implement further ones.
+`dwin-setup`. Currently two proxies are implemented:
+1. a generic proxy for X11 window managers using [xdotool](https://github.com/jordansissel/xdotool), and
+2. a proxy for KDE on X11 or Wayland
+It should be possible to implement further ones.
+
+The generic X11 proxy uses
+<ol type="i">
+<li>[xdotool](https://github.com/jordansissel/xdotool) for arranging windows and 
+navigation by name and</li>
+<li>a few lines elisp for directional navigation on top.</li>
+</ol>
+
 The KDE proxy uses
 <ol type="i">
-<li>dbus calls to org.kde.kglobalaccel (KDE's shortcuts application),
-   esp. for directional navigation, and</li>
-<li>kdotool for navigation by name.</li>
+<li>[kdotool](https://github.com/jinliu/kdotool) for arranging windows and navigation by name and</li>
+<li>dbus calls to org.kde.kglobalaccel (KDE's shortcuts application)
+   for directional navigation.</li>
 </ol>
-See code sect. 2.
+See code sect. 4.
 
 🏷️ Navigation by name is provided by `dwin-switch-to-app` that will
 <ol type="i">
@@ -203,32 +227,49 @@ It needs the same handling as the other apps above.
 By default, navigation by name will switch to the first window of an application,
 if it has several. You can use a prefix arg to switch to a specific one,
 e.g., `C-2 M-x my/firefox` or `C-2 <f11>` to switch to the second one. 
-See code sect. 3.
+See code sect. 5.
 
 For 🔀 directional navigation, we defined a short function
 `dwin-windmove-left` for each direction. The function tries to
 move inside emacs via `windmove`, and if this fails, uses the
 window manager to move out of emacs.
 The same method also uses the window manager to move
-directional from desktop windows. See code sect. 4.
+directional from desktop windows. See code sect. 6.
 
-Code sect. 5 contains function `dwin-grab` to ⧉ arrange desktop windows, i.e.,
+Code sect. 7 contains function `dwin-grab` to ⧉ arrange desktop windows, i.e.,
 to resize them, reposition them etc. 
 
 ### Known Issues and Limitations:
-1. Requesting help for a **global** key binding with `describe key` will not work.
+1. <a id="limit:help-for-global-keys">Requesting help for a **global** key binding with 
+   `describe key` will not work.</a>
 
-   Emacs will get the key forwarded, but not as input for the already running
-   describe-key function. In effect, if you say `M-x describe-key` and then type
-   a global key like `M-<left>`, its action is executed and help for the **next**
-   key the user types is shown. To view the help, you have to know how the key
-   is called in emacs and say `M-: (describe-key (kbd "M-<left>"))` instead.
+	Emacs will get the key forwarded, but not as input for the already running
+	describe-key function. In effect, if you say `M-x describe-key` and then type
+	a global key like `M-<left>`, its action is executed and help for the **next**
+	key the user types is shown. To view the help, you have to know how the key
+	is called in emacs and say `M-: (describe-key (kbd "M-<left>"))` instead.
 
-   One could instrument `dwin-input-key` to detect if `describe-key` is running
-   by checking `(describe-key (kbd "M-<left>"))` and then run `describe-key` with
-   the key instead of the command the key is bound to. However, I found no
-   way to cancel the already running describe-key command. So the second issue
-   will persist. 
+	One could instrument `dwin-input-key` to detect if `describe-key` is running
+	by checking `(describe-key (kbd "M-<left>"))` and then run `describe-key` with
+	the key instead of the command the key is bound to. However, I found no
+	way to cancel the already running describe-key command. So the second issue
+	will persist. 
+
+2. <a id="limit:irrelevant-windows">Arranging windows under X11-generic shows auxiliary windows.</a>
+
+	Thus the window list you have to pick from contains some irrelevant options. 
+	It also implies, that in navigation by name window 0 sometimes may not be the window 
+	you want to switch to. Just try `C-0 C-11`, `C-1 C-11`, `C-2 C-11` etc. until you are the right
+	window. Next time you hit just `C-11`, dwin will go there directly.
+
+	For KDE/KWin windows found by kdotool usually represent top-level apps, so all of them
+	likely are relevant.
+
+3. <a id="limit:x11-less-tested">A word of caution about the X11-generic proxy.</a>
+
+	The KDE/KWin Wayland proxy I am using myself daily, so it should be fairly 
+	well working most of the time. The generic X11 proxy I can only test occasionally
+	and it might have more bugs.
 
 ### Further details:
 1. <a id="why-not-ydotool">Why cannot we just use ydotool to send keys to emacs?</a>
@@ -258,7 +299,7 @@ to resize them, reposition them etc.
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | [exwm](https://github.com/emacs-exwm/exwm)       | ✅ | 🚫 | 🚫 | ✅ | ✅ | ✅ |
 | [ewmctrl](https://github.com/flexibeast/ewmctrl) | ✅ | 🚫 | ✅ | ✅ | 🚫 | 🚫 |
-| **dwin (this one)**                              | ✅<br/>(KDE) | ✅<br/>(KDE) | ✅<br/>(KDE) | ✅ | ✅ | ✅ |
+| **dwin (this one)**                              | ✅ | ✅<br/>(KDE) | ✅<br/>(X11,KDE) | ✅ | ✅ | ✅ |
 
 1. **[exwm](https://github.com/emacs-exwm/exwm)**:
    exwm is a full X11 window manager implemented in Emacs.
