@@ -9,7 +9,7 @@ repos:
         entry: emacs --batch -Q -f batch-byte-compile
         language: system
         files: \.el$
-        exclude: ^etc/(example-emacs-init|dev-emacs-init|tests)
+        exclude: ^etc/(example-emacs-inits|dev-emacs-init|tests|snippets)
 
       # ------------------------
       # 2. ELisp: checkdoc
@@ -19,7 +19,7 @@ repos:
         entry: emacs --batch -Q -l checkdoc
         language: system
         files: \.el$
-        exclude: ^etc/(example-emacs-init|dev-emacs-init|tests)
+        exclude: ^etc/(example-emacs-inits|dev-emacs-init|tests|snippets)
 
       # ------------------------
       # 3. ELisp: linting
@@ -30,7 +30,7 @@ repos:
         # entry: emacs --batch -Q -l package-lint -f package-lint-batch-and-exit
         language: system
         files: \.el$
-        exclude: ^etc/(example-emacs-init|dev-emacs-init|tests)
+        exclude: ^etc/(example-emacs-inits|dev-emacs-init|tests|snippets)
 
       # ------------------------
       # 4. ELisp: whitespace

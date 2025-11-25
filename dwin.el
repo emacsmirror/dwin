@@ -286,7 +286,7 @@ If A, B, and STEP are given, return integers from A to B-1 in steps of STEP."
 	  (command-execute cmd nil key-vector)
 	(message "no key binding for %s." key) ))))
 
-;;_ 4. window manager proxy, here for KDE/KWin
+;;_ 4. window manager proxy, here for X11-generic and KDE/KWin
 ;; we define three object constructors for window manager proxies:
 ;; 1. proxy-dotool-based: to pool all methods common for xdotool and kdotool.
 ;; 2. proxy-x11-generic: to talk to x11 via xdotool, not to any wm specifically.
@@ -326,7 +326,6 @@ TODO: break ties."
   (let ((win (dwin--next-window-in-direction proxy direction)))
     (when win
       (dwin-call proxy 'windowactivate win))))
-
 
 (defun dwin--new-proxy-dotool-based ()
   "Create new (abstract) base object for dotool based proxies."
@@ -371,9 +370,9 @@ TODO: break ties."
 						       "search" ;; "--all"
 						       "--pid"
 						       (format "%s" pid) )))
-            (cons 'getwindowname (lambda (id) (dwin-call
-					       self 'dotool
-					       "getwindowname" id)))
+            (cons 'getwindowname (lambda (id) (nth 0 (dwin-call
+						      self 'dotool
+						      "getwindowname" id))))
             (cons 'getwindowgeometry (lambda (id)
 				       (let ((lines (dwin-call
 						     self 'dotool
@@ -435,7 +434,8 @@ TODO: break ties."
 						"set_desktop" "--relative"
 						(format "%s" number))
 				   (dwin-call self 'dotool "set_desktop"
-					      (format "%s" number))))) ))
+					      (format "%s" number)))))
+	    (cons 'short-windowid (lambda (id) id)) ))
     self))
 
 ;;_ 4.2 wm proxy for X11 generic (xdotool)
@@ -555,8 +555,10 @@ Filters using `search-filter'."
 						    "Switch Window Up")))
 	  (cons 'switch-down  (lambda () (dwin-call self
 						    'invoke-shortcut
-						    "Switch Window Down"))) ))
-    self))
+						    "Switch Window Down")))
+	  (cons 'short-windowid (lambda (id)
+				  (substring id 1 5))) ))
+	 self))
 
 ;;_ 4.4 setting up the wm proxy
 (defvar dwin-proxy nil
@@ -857,11 +859,19 @@ If RELATIVE is t, make the new size relative to the old one."
   "Get a list of all windows as (id . name) pairs (cons cells)."
   (let* ((wins (dwin-call dwin-proxy 'search-class ""))
 	 (names (mapcar (dwin-get dwin-proxy 'getwindowname) wins))
+	 (urgh (message "names: %s" (prin1-to-string names)))
 	 (names-with-ids (cl-mapcar (lambda (a b)
-				      (format "%s (%s)" a b))
+				      (format "%s (%s)" a
+					      (dwin-call dwin-proxy 'short-windowid b)))
+					      ;; b))
 				    names wins))
 	 (name-id-pairs (cl-mapcar 'cons names-with-ids wins)))
     name-id-pairs))
+
+;; (dwin-setup)
+;; (dwin--window-names)
+;; (dwin-call dwin-proxy 'getwindowname "{0b82ec55-ef36-4a0b-8de6-5c201ac0039f}")
+;; (dwin-call dwin-proxy 'short-windowid "{0b82ec55-ef36-4a0b-8de6-5c201ac0039f}")
 
 (defvar dwin--history-window-names nil
   "History of window names picked by the user.
@@ -877,72 +887,137 @@ Returns a pair/cons (NAME . ID)."
 		      nil t nil 'dwin--history-window-names)
      window-name-id-pairs)))
 
-;;;###autoload
-(defun dwin-grab (&optional window)
-  "Let the user grab and arrange WINDOW interactively, e.g., move, resize etc."
+(defun dwin-current-window-or-ask (prompt)
+  "Return the `dwin-current-window', if bound and set; otherwise ask the user.
+PROMPT gives a short text to use when asking.
+Uses `dwin-read-window' to ask the user.
+`dwin-current-window' should be set only locally."
+  (if (and (boundp 'dwin-current-window) dwin-current-window)
+      dwin-current-window
+    (dwin-read-window prompt)))
+
+;; short commands with some doc, so we can bind them to keys
+(defun dwin-select (window)
+  "select WINDOW as `dwin-current-window'."
+  (interactive (list (dwin-read-window "window: ")))
+  (setq-local dwin-current-window (cdr window)))
+
+(defun dwin-select-emacs ()
+  "select emacs' own window as `dwin-current-window'."
+  (interactive)
+  (let ((wins (dwin-call dwin-proxy 'search-pid (emacs-pid))))
+    (when wins
+      (setq-local dwin-current-window (nth 0 wins)))))
+
+;; (setq dwin-current-window nil)  (setq win nil) window
+
+(defun dwin-activate (window)
+  "activate WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowactivate window))
+
+(defun dwin-raise (window)
+  "raise WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowraise window))
+
+(defun dwin-close (window)
+  "close WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowclose window))
+
+(defun dwin-minimize (window)
+  "minimize WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowminimize window))
+
+(defun dwin-move-left (window)
+  "move WINDOW to the left. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowmove window (- dwin-move-x) 0 t))
+
+(defun dwin-move-right (window)
+  "move WINDOW to the right. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowmove window dwin-move-x 0 t))
+
+(defun dwin-move-up (window)
+  "move WINDOW up. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowmove window 0 (- dwin-move-y) t))
+
+(defun dwin-move-down (window)
+  "move WINDOW down. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-call dwin-proxy 'windowmove window 0 dwin-move-y t))
+
+(defun dwin-resize-decrease-width (window)
+  "decrease width of WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-resize window (- dwin-resize-x) 0 t))
+
+(defun dwin-resize-increase-width (window)
+  "increase width of WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-resize window dwin-resize-x 0 t))
+
+(defun dwin-resize-decrease-height (window)
+  "decrease height of WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-resize window 0 (- dwin-resize-y) t))
+
+(defun dwin-resize-increase-height (window)
+  "increase height of WINDOW. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list (dwin-current-window-or-ask "window: ")))
+  (dwin-resize window 0 dwin-resize-y t))
+
+(defun dwin-move-to-desktop (window desktop)
+  "move WINDOW to DESKTOP. If missing, take `dwin-current-window', else ask the user."
+  (interactive (list
+		(dwin-current-window-or-ask "window: ")
+		(read-minibuffer "move window to desktop number: ")))
+  (dwin-call dwin-proxy 'set_desktop_for_window window desktop))
+
+(defvar dwin-arrange-keymap nil
+  "Keymap for dwin arrange commands.")
+
+(setq dwin-arrange-keymap
+      (let ((map (make-sparse-keymap)))
+        ;; choose window
+        (keymap-set map "W" #'dwin-seelct)
+        (keymap-set map "." #'dwin-select-emacs)
+        ;; visibility
+        (keymap-set map "a" #'dwin-activate)
+        (keymap-set map "c" #'dwin-close)
+        (keymap-set map "M" #'dwin-minimize)
+        (keymap-set map "r" #'dwin-raise)
+        ;; move
+        (keymap-set map "<left>"  #'dwin-move-left)
+        (keymap-set map "<right>" #'dwin-move-right)
+        (keymap-set map "<up>"    #'dwin-move-up)
+        (keymap-set map "<down>"  #'dwin-move-down)
+        (keymap-set map "D"       #'dwin-move-to-desktop)
+        ;; resize
+        (keymap-set map "-"   #'dwin-resize-decrease-width)
+        (keymap-set map "+"   #'dwin-resize-increase-width)
+        (keymap-set map "M--" #'dwin-resize-decrease-height)
+        (keymap-set map "M-+" #'dwin-resize-increase-height)
+        ;; quit
+        (keymap-set map "q" 'ignore) ; quit
+        map))
+
+(defun dwin-grab (window)
+  "Arrange WINDOW interactively using `dwin-arrange-keymap'."
   (interactive
-   (list
-    (dwin-read-window "window to act on: ")))
-  (let* ((win (cdr window))
-	 ;; (name (car window))
-	 (commands
-          `(("a" . ,(lambda () (dwin-call dwin-proxy 'windowactivate win)))
-            ("c" . ,(lambda () (dwin-call dwin-proxy 'windowclose win)))
-            ("M" . ,(lambda () (dwin-call dwin-proxy 'windowminimize win)))
-            ("r" . ,(lambda () (dwin-call dwin-proxy 'windowraise win)))
-	    ("<left>" . ,(lambda () (dwin-call dwin-proxy 'windowmove
-					       win (- 0 dwin-move-x) 0 t)))
-	    ("<right>" . ,(lambda () (dwin-call dwin-proxy 'windowmove
-						win dwin-move-x 0 t)))
-	    ("<up>" . ,(lambda () (dwin-call dwin-proxy 'windowmove
-					     win 0 (- 0 dwin-move-y) t)))
-	    ("<down>" . ,(lambda () (dwin-call dwin-proxy 'windowmove
-					       win 0 dwin-move-y t)))
-	    ("-" . ,(lambda () (dwin-resize win (- 0 dwin-resize-x) 0 t)))
-	    ("+" . ,(lambda () (dwin-resize win dwin-resize-x 0 t)))
-	    ("M--" . ,(lambda () (dwin-resize win 0
-					      (- 0 dwin-resize-y) t)))
-	    ("M-+" . ,(lambda () (dwin-resize win 0 dwin-resize-y t)))
-	    ("W" . ,(lambda()
-		      (progn (setq window (dwin-read-window
-					   "window to act on: "))
-			     (setq win (cdr window))
-			     ;; (setq name (car window))
-			     )))
-	    ("." . ,(lambda()
-		      (let ((wins (dwin-call dwin-proxy 'search-pid
-					     (emacs-pid))))
-			(when wins
-			  (setq win (nth 0 wins))
-			  ;; (setq name "emacs")
-			  ;; (setq window (cons name . win))
-			))))
-	    ("D" . ,(lambda()
-		      (let ((number
-			     (read-minibuffer
-			      "move window to desktop number: ")))
-			(dwin-call dwin-proxy 'set_desktop_for_window
-				   win number))))
-            ;; ("S" . (lambda () (dwin-call dwin-proxy 'windowstate ,win)))
-            ("q" . quit))))
-    ;; loop until user chooses "q" --- poor man's hydra
-    (catch 'quit
-      (while t
-	(message (concat
-		  "window: a activate, c close, M minimize, r raise, "
-		  "left/right/up/down move, +/- resize width, "
-		  "M-+/- resize height, D set desktop, "
-		  "W pick window, . pick self, q quit"))
-        (let* ((key (read-key))
-	       (key-desc (single-key-description key))
-               (fn (cdr (assoc key-desc commands))))
-          (cond ((eq fn 'quit)
-		 (throw 'quit nil))
-		(fn
-		 (funcall fn))
-		(t
-		 nil ; unknown command key: do nothing for the moment
-		 )))))))
+   (list (cdr (dwin-read-window "window to arrange: "))))
+  (save-excursion
+    (switch-to-minibuffer)
+    (setq-local dwin-current-window window)
+    (set-transient-map
+     dwin-arrange-keymap
+     (lambda () (not (eq this-command 'ignore)))
+     (lambda () (message "arranging windows done."))
+     "arrange window %k: ")))
 
 (provide 'dwin)
 ;;; dwin.el ends here

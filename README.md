@@ -4,7 +4,8 @@
   <a href="#setup"><b>Setup 🏁</b></a> |
   <a href="#usage"><b>Advanced Usage 🚀</b></a> |
   <a href="#impl"><b>Implementation 🛠️</b></a> |
-  <a href="#relatedwork"><b>Related Work 📚</b></a>
+  <a href="#relatedwork"><b>Related Work 📚</b></a> |
+  <a href="#extensions"><b>Extensions 🧩</b></a>
 </p>
 <hr>
 
@@ -286,7 +287,7 @@ to resize them, reposition them etc.
 
    Unfortunately sending dbus events to kwin from bash was unstable
    for me: running
-     ```
+     ```bash
      qdbus6 org.kde.kglobalaccel /component/kwin \
 	 org.kde.kglobalaccel.Component invokeShortcut "Switch Window Left"
 	 ```
@@ -341,3 +342,26 @@ to resize them, reposition them etc.
    [ewm](https://github.com/laluxx/ewm/)
    and many other packages allow you to manage **Emacs windows**.
    - dwin is about managing Emacs external, **desktop windows**.
+
+## <a id="extensions">5. How to Customize and to Extend 🧩</a>
+1. Adding commands to `dwin-grab':
+
+	Just bind them to `dwin-arrange-keymap`, for example 
+	(see [example](etc/snippets/01-additional-command-for-dwin-grab.el)):
+	```emacs-lisp
+	(defun my-say-hello ()
+		"Test function that just says hello."
+		(interactive)
+		(message "Hello!"))
+
+	(defun my-show-geometry ()
+		"Show position and size of `dwin-current-window."
+		(interactive)
+		(message "geometry: %s"
+			(dwin-call dwin-proxy 'getwindowgeometry dwin-current-window)))
+
+	(keymap-set dwin-arrange-keymap "!" #'my-say-hello)
+	(keymap-set dwin-arrange-keymap "g" #'my-show-geometry)
+	```
+	Commands can access `dwin-current-window`, the window ID of the currently
+	selected window. Bind them in `use-package :config` or after dwin has been loaded.
