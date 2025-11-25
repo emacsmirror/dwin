@@ -145,6 +145,11 @@
   :type 'boolean
   :group 'dwin)
 
+(defcustom dwin-app-startup-grace-period 0.3
+  "Seconds to wait for an app to start to capture new windows."
+  :type 'float
+  :group 'dwin)
+
 (defcustom dwin-log-level 1
   "How verbose dwin should send messages to the user.
 0 = none, 1 = info, 2 = debug."
@@ -623,7 +628,13 @@ If RELATIVE is t, switch relative to the current desktop."
 (defvar dwin-process-per-app (make-hash-table :test 'equal)
   "Keep track of processes of apps started from within Emacs.
 This deliberately does not cover processes started outside Emacs.
- Used by `dwin-switch-to-app'.")
+The key is the cmd used to start the process.
+The value is an alist with fields
+- process: the process object,
+- windows: windows created briefly after startup.
+  (i.e., new windows spawned as reaction to a launcher
+  app like 'firefox --new-window'.
+Used by `dwin-switch-to-app'.")
 
 (defvar dwin-last-window-per-app (make-hash-table :test 'equal)
   "Keep track of the window the user has explicitly selected last time.
@@ -678,30 +689,51 @@ Keeps track of the last application launched in
   (interactive (list (read-shell-command "$ ")))
   (let* ((buf-name-output (generate-new-buffer-name
 			   (concat "* " cmd " -- output *")))
+	 (result nil)
+	 (wins-before (dwin-call dwin-proxy 'search-class ""))
 	 (proc (start-process-shell-command cmd buf-name-output cmd)))
     (dwin-message 2 "dwin-run proc=%s" proc)
     ;; check if it dies immediately
-    (sleep-for 0.1) ;; let the process start
-    (if (and (not (process-live-p proc))
-	     (not (eq (process-exit-status proc) 0)))
-	(dwin-message-with-link
-	 (dwin-buffer-link buf-name-output "[📄output]")
-	 "❌ error starting %s: %s"
-	 cmd
-	 (dwin-buffer-first-line buf-name-output) )
-      ;; else remember it:
-      (puthash cmd proc dwin-process-per-app)
-      proc)))
+    (sleep-for dwin-app-startup-grace-period) ;; let the process start
+    (cond ((and (not (process-live-p proc))
+		(not (eq (process-exit-status proc) 0)))
+	   ;; a. process ended with error
+	   (let ((error-msg (format "❌ error starting %s: %s"
+				    cmd
+				    (dwin-buffer-first-line buf-name-output))))
+	     (dwin-message-with-link
+	      (dwin-buffer-link buf-name-output "[📄output]")
+	      msg)
+	     (setq result (list (cons 'error error-msg))) ))
+	  ((not (process-live-p proc))
+	   ;; b. process ended w/o error: maybe it created a window? (launcher)
+	   (let* ((wins-after (dwin-call dwin-proxy 'search-class ""))
+		  (wins-new (cl-set-difference wins-after wins-before :test #'equal)))
+	     ;; remember new windows:
+	     (setq result (list (cons 'windows wins-new)) )))
+	  (t
+	   ;; c. process runs: remember process & pid:
+	   (setq result (list (cons 'process proc)))))
+    (when (not (alist-get 'error result nil))
+      ;; do not record errors
+      (puthash cmd result dwin-process-per-app))
+    result))
 
-(defun dwin-window-app (name)
-  "Return the window of the app NAME started last by us via `dwin-run'."
-  (let* ((proc (gethash name dwin-process-per-app nil))
+(defun dwin-window-for-command-started-by-us (cmd)
+  "Return the window of the command CMD started last by us via `dwin-run'."
+  (let* ((proc-or-windows (gethash cmd dwin-process-per-app nil))
+	 (proc (alist-get 'process proc-or-windows nil))
+	 ;; a. windows captured at startup
+	 (windows-start (alist-get 'windows proc-or-windows nil))
+	 ;; 
 	 (pid (when (process-live-p proc)
 		(process-id proc)))
-	 (wins (when pid
-		 (dwin-call dwin-proxy 'search-pid pid)))
-	 (win (when wins
-		(nth 0 wins))))
+	 ;; b. windows associated with the process
+	 (windows-pid (when pid
+			(dwin-call dwin-proxy 'search-pid pid)))
+	 (windows (append windows-pid windows-start))
+	 (win (when windows
+		(nth 0 windows))) ) ; for now just take the first
     win))
 
 (defun dwin-expand-tilde-only (path)
@@ -728,12 +760,20 @@ Only the normalized command we then can find with pgrep."
 	 pids))
 
 (defun dwin-find-windows-for-command (cmd)
-  "Find all windows for a given CMD, using pids."
+  "Find all windows for a given CMD.
+Check two sources:
+- all running processes having CMD as command and their windows.
+- windows created when we started CMD."
   (let* ((pids (dwin-find-pids-for-command cmd))
-	 (wins (mapcan (lambda (pid) (dwin-call dwin-proxy
-						'search-pid pid))
-		       pids)) )
-    wins))
+	 (windows-processes (mapcan (lambda (pid) (dwin-call dwin-proxy
+							  'search-pid pid))
+				 pids))
+	 (windows-start (alist-get 'windows
+				   (gethash cmd dwin-process-per-app nil) nil))
+	 (windows (append windows-processes windows-start)))
+    (dwin-message 2 "win/cmd: '%s'\n  @proc: %s\n  @start: %s"
+		  cmd windows-processes windows-start)
+    windows))
 
 ;;;###autoload
 (defun dwin-switch-to-app (cmd &optional prefix)
@@ -753,12 +793,7 @@ If there are more than one window, we will activate:
 	 (read-shell-command "switch to app: ")
 	 "P"))
   ;; 1. check windows
-  (let* (;; (cmd-parts (split-string-and-unquote cmd))
-	 ;; (cmd-name (when cmd-parts (nth 0 cmd-parts)))
-	 ;; (wins (dwin-call dwin-proxy 'search-class cmd-name))
-	 ;;    finds all "evince"s, not just "evince ~/a.pdf"
-	 (wins (dwin-find-windows-for-command cmd))
-         ;; via pgrep: finds only "evince ~/a.pdf"
+  (let* ((wins (dwin-find-windows-for-command cmd))
 	 (active-win (dwin-call dwin-proxy 'getactivewindow))
 	 (is-active (member active-win wins))
 	 ;;
@@ -771,7 +806,7 @@ If there are more than one window, we will activate:
     (let ((win (or
 		win-prefix
 		(gethash cmd dwin-last-window-per-app nil)
-		(dwin-window-app cmd)
+		(dwin-window-for-command-started-by-us cmd)
 		(nth 0 wins))))
       ;; 3. do it
       (cond

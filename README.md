@@ -165,6 +165,22 @@ compositors.
 - You can use the global key mechanism to let emacs handle any key globally and 
   execute some command. 
 
+5. **Switching back to launchers**.
+- Launchers are short-lived programs that ask another server process to do something, 
+  for example to show a webpage or PDF, and then terminate. `firefox <url>` is such a 
+  launcher. Once firefox is running, the second call does not start another firefox process,
+  but just asks the first one to show another URL.
+- One cannot switch back to launchers based on their PID, because the created windows
+  are not associated with their PID, but with the PID of the server process.
+- If server processes open **new windows**, then dwin will capture those windows
+  and switch back to them.
+- This way you can switch back to `firefox --new-window <url>` (as it opens a new
+  window), but not to `firefox --new-tab <url>` (as it does not; switching back
+  to the tab would require to know which window contains tabs showing which URLs
+  and a function to switch to a specific tab programmatically. Few applications have 
+  these features. So for switching between Emacs and another launcher application, 
+  best create new windows.
+
 ## <a id="impl">3. How it is implemented 🛠️</a>
 dwin provides two types of navigation:
 1. 🏷️ navigation by name,
@@ -344,7 +360,7 @@ to resize them, reposition them etc.
    - dwin is about managing Emacs external, **desktop windows**.
 
 ## <a id="extensions">5. How to Customize and to Extend 🧩</a>
-1. Adding commands to `dwin-grab':
+1. Adding commands to `dwin-grab`:
 
 	Just bind them to `dwin-arrange-keymap`, for example 
 	(see [example](etc/snippets/01-additional-command-for-dwin-grab.el)):
