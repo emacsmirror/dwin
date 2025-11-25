@@ -107,6 +107,7 @@
 ;;_ 0. required packages
 (require 'dbus)
 (require 'cl-lib)
+(require 'server)
 
 ;;_ 1. some customization
 (defgroup dwin nil
@@ -142,6 +143,12 @@
 (defcustom dwin-be-quiet nil
   "Set to t, if dwin should send fewer messages to the user."
   :type 'boolean
+  :group 'dwin)
+
+(defcustom dwin-log-level 1
+  "How verbose dwin should send messages to the user.
+0 = none, 1 = info, 2 = debug."
+  :type '(integer :tag "Log level")
   :group 'dwin)
 
 ;;_ 2. some prerequisites / utilities
@@ -204,9 +211,9 @@ attributes and functions."
 (make-obsolete 'dwin-method 'dwin-get "0.1.2")
 
 ;;_ 2.2 logging
-(defun dwin-message (format &rest args)
-  "Send a `message' with FORMAT and ARGS, unless `dwin-be-quiet' is true."
-  (unless dwin-be-quiet
+(defun dwin-message (level format &rest args)
+  "Send a `message' with FORMAT and ARGS, if LEVEL is at smaller equal `dwin-log-level'."
+  (when (<= level dwin-log-level)
     (apply #'message format args)))
 
 ;;_ 2.3 functions on basic data structures
@@ -260,6 +267,7 @@ If A, B, and STEP are given, return integers from A to B-1 in steps of STEP."
   Example: (dwin-input-key \"C-<f11>\")."
   (interactive (list
 		(read-from-minibuffer "Key to input: ")))
+  (dwin-message 2 "dwin-input-key: %s" key)
   (if (eq this-command 'describe-key)
       ;; 1. the user is trying to get help for the key: show it
       (progn
@@ -314,6 +322,7 @@ TODO: break ties."
 
 (defun dwin--switch-direction (proxy direction)
   "Switch from active window in DIRECTION using PROXY."
+  (dwin-message 2 "dwin--switch-direction: %s" direction)
   (let ((win (dwin--next-window-in-direction proxy direction)))
     (when win
       (dwin-call proxy 'windowactivate win))))
@@ -515,8 +524,8 @@ Filters using `search-filter'."
 	  (cons '_class "proxy-kwin")
 	  (cons 'dotool-name "kdotool")
 	  ;; private methods:
-	  ;; kdotool does not signal errors on empty search results. simplify dotool method:
 	  (cons 'invoke-shortcut (lambda (name)
+				   (dwin-message 2 "invoke-shortcut: %s" name)
 				   (condition-case err
 				       (dbus-call-method
 					:session
@@ -579,8 +588,7 @@ otherwise returns \"unknown\"."
    ;; fallback
    (t "unknown")))
 
-;;;###autoload
-(defun dwin-setup ()
+(defun dwin-setup-proxy ()
   "Setup the desktop window manager dwin.
 Create a proxy object to interact with the current window manager.
 The object is stored in `dwin-proxy'."
@@ -591,6 +599,16 @@ The object is stored in `dwin-proxy'."
       (_ (progn
 	   (setq dwin-proxy nil)
 	   (message "no proxy for window manager '%s'." wm) )))))
+
+;;;###autoload
+(defun dwin-setup ()
+  "Setup the desktop window manager dwin.
+Create a proxy object via `dwin-setup-proxy' to interact with the current
+window manager / compositor and store in `dwin-proxy'.
+Also start the emacs server, if not running already." 
+  (unless (server-running-p)
+    (server-start))
+  (dwin-setup-proxy))
 
 ;;_ 4.5 convenience functions using the setup wm proxy
 (defun dwin-switch-to-desktop (number &optional relative)
@@ -659,7 +677,7 @@ Keeps track of the last application launched in
   (let* ((buf-name-output (generate-new-buffer-name
 			   (concat "* " cmd " -- output *")))
 	 (proc (start-process-shell-command cmd buf-name-output cmd)))
-    (dwin-message "dwin-run proc=%s" proc)
+    (dwin-message 2 "dwin-run proc=%s" proc)
     ;; check if it dies immediately
     (sleep-for 0.1) ;; let the process start
     (if (and (not (process-live-p proc))
@@ -756,15 +774,15 @@ If there are more than one window, we will activate:
       ;; 3. do it
       (cond
        ((not wins)
-	(dwin-message "launch %s" cmd)
+	(dwin-message 1 "launch %s" cmd)
 	(dwin-run cmd) )
        ((not is-active)
-	(dwin-message "activate %s" cmd)
+	(dwin-message 1 "activate %s" cmd)
 	(dwin-call dwin-proxy 'windowactivate win)
 	nil  ; return nothing
 	)
        (t
-	(dwin-message "toggle/reactivate Emacs")
+	(dwin-message 1 "toggle/reactivate Emacs")
 	(dwin-switch-to-emacs-or) )))))
 
 ;;;###autoload

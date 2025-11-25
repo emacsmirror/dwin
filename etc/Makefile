@@ -17,7 +17,7 @@ show:
 .PHONY: test
 test:
 	mkdir -p $(TESTDIR)/straight/repos
-	ln -s $(PACKAGE_DIR)/etc/example-emacs-init/init.el $(TESTDIR)/init.el || true
+	ln -s $(PACKAGE_DIR)/etc/example-emacs-inits/02-dwin-via-straight/init.el $(TESTDIR)/init.el || true
 	ln -s $(PACKAGE_DIR) $(TESTDIR)/straight/repos || true
 	emacs --debug-init --init-directory $(TESTDIR)
 

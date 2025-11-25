@@ -1,4 +1,4 @@
-;; dwin/etc/example-emacs-config/init.el      -*- lexical-binding: t; -*-
+;; dwin/etc/example-emacs-init/init.el      -*- lexical-binding: t; -*-
 ;; - an example emacs init.el loading dwin.
 
 ;;_ 1. straight package manager
@@ -17,14 +17,9 @@
 
 (straight-use-package 'use-package)
 
-;;_ 2. emacs server  (required to get global keys when emacs has no focus)
-(require 'server)
-(unless (server-running-p)
-  (server-start))
-
-;;_ 3. dwin 
+;;_ 2. dwin 
 (use-package dwin
-  :straight (dwin :type git :repo "https://github.com/lsth/dwin.git")
+  :straight (dwin :type git :host github :repo "lsth/dwin")
   :config
   (dwin-setup)
   ;; a. directional navigation

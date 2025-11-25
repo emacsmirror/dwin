@@ -27,15 +27,7 @@ compositors.
 <hr>
 
 ## <a id="setup">1. How to setup and basic use 🏁</a>
-In your `init.el` (see [example](etc/example-emacs-init/init.el)):
-
-1. Ensure emacs server is running
-   ```emacs-lisp
-   (require 'server)
-   (unless (server-running-p)
-	   (server-start))
-	```
-	Also make sure:
+1. Make sure
     - your are running 
 	  - X11 --- any window manager compatible with [xdotool](https://github.com/jordansissel/xdotool) should do, or 
 	  - KDE/KWin, either under Wayland or X11. 
@@ -47,16 +39,26 @@ In your `init.el` (see [example](etc/example-emacs-init/init.el)):
 	   <br/>--- can be installed via `cargo install kdotool`, 
 	   if cargo and rust is installed; rust and cargo you can install via your Linux
  	   package manager.
-2. For ⧉ **arranging desktop windows** from within emacs, add to your `init.el`:
+2. For ⧉ **arranging desktop windows** from within emacs, add to your `init.el`
+   (with [MELPA](https://www.melpa.org/) already configured; 
+   see [example init.el](etc/example-emacs-inits/01-dwin-via-package/init.el)):
    ```emacs-lisp
-	(use-package dwin
-		:straight (dwin :type git :repo "https://github.com/lsth/dwin.git")
-		:config
-		(dwin-setup))
-	```
+   (use-package dwin
+	   :ensure t
+	   :config
+	   (dwin-setup))
+   ```
+	or, if you are using the package manager [straight.el](https://github.com/radian-software/straight.el)
+	(see [example init.el](etc/example-emacs-inits/02-dwin-via-straight/init.el)):
+   ```emacs-lisp
+   (use-package dwin
+      :straight (dwin :type git :host github :repo "lsth/dwin")
+      :config
+      (dwin-setup))
+   ```
 	Then with `M-x dwin-grab` you can grab any desktop window and resize and reposition it. 
 
-	For X11 there are some irrelevant windows; see <a href="#limit:irrelevant-windows">Known Issues 2</a>.
+	For X11 also some irrelevant windows will be offered; see <a href="#limit:irrelevant-windows">Known Issues 2</a>.
 	There should be no such issue with KDE/KWin.
 
 3. For 🔀 **directional navigation**, add to `use-package`:
@@ -184,8 +186,10 @@ methods in a window manager proxy object `dwin-proxy` whose
 methods can be called via `dwin-call`. The proxy has to be created
 once before use, e.g., during emacs initialization, using
 `dwin-setup`. Currently two proxies are implemented:
+
 1. a generic proxy for X11 window managers using [xdotool](https://github.com/jordansissel/xdotool), and
-2. a proxy for KDE on X11 or Wayland
+2. a proxy for KDE on X11 or Wayland.
+
 It should be possible to implement further ones.
 
 The generic X11 proxy uses
