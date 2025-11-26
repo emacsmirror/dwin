@@ -35,9 +35,10 @@ to preview, in project directory:
 ```
 
 ## 3. releases and versions
-1. update `dwin.el`  header 
+1. update `dwin.el`  and `dwin-compat.el` header 
    and create a commit "bump version to 0.1"
    (as a stand-alone commit)
+   - add the news collected in nongit/dwin.org
 2. create a git tag:
 ```
 git tag -a v0.1 -m "Release version 0.1"
