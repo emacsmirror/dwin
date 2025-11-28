@@ -105,8 +105,9 @@
 
 ;;; Code:
 ;;_ 0. required packages
-(require 'dbus)
 (require 'cl-lib)
+(require 'seq)
+(require 'dbus)
 (require 'server)
 
 (declare-function keymap-set nil)
@@ -154,6 +155,12 @@ To take effect, the proxy has to be reset via `dwin-setup'."
 (defcustom dwin-app-startup-grace-period 0.3
   "Seconds to wait for an app to start to capture new windows."
   :type 'float
+  :group 'dwin)
+
+(defcustom dwin-visited-windows-history-capacity 100
+  "Number of recent window visits to remember.
+Earlier window visits will be forgotten."
+  :type 'integer
   :group 'dwin)
 
 (defcustom dwin-log-level 1
@@ -229,11 +236,11 @@ Skip, if LEVEL exceeds `dwin-log-level'."
     (apply #'message format args)))
 
 ;;_ 2.3 functions on basic data structures
-(defun dwin-collect (lst pred)
-  "Return a sublist of LST of all elements x for which (PRED x) is t."
-  (cl-loop for x in lst
-           for r = (funcall pred x)
-           when r collect x))
+;; (defun dwin-collect (lst pred)
+;;   "Return a sublist of LST of all elements x for which (PRED x) is t."
+;;   (cl-loop for x in lst
+;;            for r = (funcall pred x)
+;;            when r collect x))
 
 (defun dwin-range (a &optional b step)
   "Return a list of integers in a given range.
@@ -316,6 +323,25 @@ If A, B, and STEP are given, return integers from A to B-1 in steps of STEP."
 ;; 3. proxy-kwin: to talk to kwin via kdotool and dbus.
 
 ;;_ 4.1 common wm proxy methods for dotool based interaction (xdotool, kdotool)
+(defvar dwin--visited-windows nil
+  "Windows visited in order of visits, most recent first.")
+
+
+;;  ;; (make-vector dwin-visited-windows-history-capacity nil)
+;; (defvar dwin--visited-windows-length 0
+;;   "Length of `dwin--visited-windows'.")
+
+(defun dwin--record-window-visit (window)
+  "Record the visit of WINDOW.
+For example, to be able to go back to a previously visited window
+later on."
+  ;; a. prepend element window
+  (setq dwin--visited-windows (cons window dwin--visited-windows))
+  ;; b. check full list
+  (when (>= (length dwin--visited-windows) dwin-visited-windows-history-capacity)
+    (setcdr (nthcdr (- dwin-visited-windows-history-capacity 1) dwin--visited-windows)
+	    nil))) ; shorten to capacity
+
 (defun dwin--next-window-in-direction (proxy direction &optional window)
   "Get the next window from WINDOW in DIRECTION.
 DIRECTION can be \='left, \='right, \='up or \='down.
@@ -340,7 +366,8 @@ TODO: break ties."
 		       (`right (lambda (idx) (nth 0 (nth idx geoms))))
 		       (`up    (lambda (idx) (- (nth 1 (nth idx geoms)))))
 		       (`down  (lambda (idx) (nth 1 (nth idx geoms))))))
-	 (indices-qual (dwin-collect (dwin-range (length wins)) pred-filter))
+	 ;; (indices-qual (dwin-collect (dwin-range (length wins)) pred-filter))
+	 (indices-qual (seq-filter pred-filter (dwin-range (length wins))))
 	 (index-best   (when indices-qual (dwin-argmin indices-qual pred-score))) )
     (dwin-message 2 "geom-start: %s" geom-start)
     (dwin-message 2 "geoms: %s" geoms)
@@ -445,9 +472,9 @@ TODO: break ties."
 						     "Geometry: " ""
 						     (nth 2 lines)))
 						   "x" t))))))
-            (cons 'windowactivate (lambda (id) (dwin-call
-						self 'dotool
-						"windowactivate" id)))
+            (cons 'windowactivate (lambda (id)
+				    (dwin--record-window-visit id)
+				    (dwin-call self 'dotool "windowactivate" id)))
             (cons 'windowclose (lambda (id) (dwin-call self 'dotool
 						       "windowclose" id)))
             (cons 'windowminimize (lambda (id) (dwin-call
@@ -527,13 +554,15 @@ TODO: break ties."
 						      "search"  ;;  "--all"
 						      "--pid"
 						      (format "%s" pid) )))
-				(dwin-collect wins pred))))
+				;; (dwin-collect wins pred))))
+				(seq-filter pred wins))))
 	  (cons 'search-class (lambda (class &optional pred)
 				"Get all X11 windows of a given CLASS that fulfill PRED."
 				(let* ((pred (or pred (dwin-get self 'search-filter)))
 				       (wins (dwin-call self 'dotool
 							"search" "--class" class)))
-				  (dwin-collect wins pred))))
+				  ;; (dwin-collect wins pred))))
+				  (seq-filter pred wins))))
 	  ;; = super.search: (as &rest args and &optional pred cannot be combined)
 	  (cons 'search-unfiltered (lambda (&rest query-args)
 			  "Get all X11 windows matching query formulated by QUERY-ARGS.
@@ -545,7 +574,8 @@ Does yield all windows without applying any filters."
 Filters using `search-filter'."
 			  (let* ((pred (dwin-get self 'search-filter))
 				 (wins (dwin-call-apply self 'search-unfiltered query-args)))
-			    (dwin-collect wins pred)))) ))))
+			    ;; (dwin-collect wins pred)))) ))))
+			    (seq-filter pred wins)))) ))))
 
 
 ;;_ 4.3 wm proxy for KDE/KWin (kdotool)
@@ -657,6 +687,20 @@ Also start the Emacs server, if not running already."
 If RELATIVE is t, switch relative to the current desktop."
   (dwin-call dwin-proxy 'set_desktop number relative))
 
+(defun dwin-get-all-windows ()
+  "Get a list of all current/valid/live window ids."
+  (dwin-call dwin-proxy 'search-class ""))
+
+(defun dwin-window-alive-p (window)
+  "Return t, if WINDOW is still alive.
+A window is considered alive, if it still is reported by search."
+  (let ((windows (dwin-get-all-windows)))
+    (when (member window windows) t)))
+
+(defun dwin-filter-alive-windows (windows)
+  "Return the sublist of WINDOWS that are still alive."
+  (cl-intersection windows (dwin-get-all-windows)))
+  
 
 ;;_ 5. navigation by name
 (defvar dwin-process-per-app (make-hash-table :test 'equal)
@@ -802,8 +846,9 @@ Check two sources:
 	 (windows-processes (mapcan (lambda (pid) (dwin-call dwin-proxy
 							  'search-pid pid))
 				 pids))
-	 (windows-start (alist-get 'windows
-				   (gethash cmd dwin-process-per-app nil) nil))
+	 (windows-start (dwin-filter-alive-windows
+			 (alist-get 'windows
+				   (gethash cmd dwin-process-per-app nil) nil)))
 	 (windows (append windows-processes windows-start)))
     (dwin-message 2 "win/cmd: '%s'\n  @proc: %s\n  @start: %s"
 		  cmd windows-processes windows-start)

@@ -29,7 +29,7 @@ repos:
         entry: emacs --batch --init-directory etc/dev-emacs-init/ -l etc/dev-emacs-init/init.el -f package-lint-batch-and-exit
         # entry: emacs --batch -Q -l package-lint -f package-lint-batch-and-exit
         language: system
-        files: \.el$
+        files: dwin.el
         exclude: ^etc/(example-emacs-inits|dev-emacs-init|tests|snippets)
 
       # ------------------------

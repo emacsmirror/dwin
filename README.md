@@ -328,6 +328,14 @@ to resize them, reposition them etc.
    Please note that this has to go to the `:init` section.
 - dwin does not run on Emacs 27 or older (see [dwin-compat.el](dwin-compat.el)).
 
+6. <a id="limit:two-emacs">Directional navigation does not work for Emacs windows of a **second emacs process**.</a>
+- Everything works fine also for several Emacs **frames**.
+- But if a second Emacs **process** is started, only the first one started will run the Emacs server.
+- And thus, with `dwin-windmove-left` etc. you can only switch between Emacs windows of the 
+  first Emacs process, not the second. The global keys never reach the second Emacs.
+- Likely one could fix this with not too much work, but it seems to be such a niche
+  case that I do not plan to look into this.
+
 ### Further details:
 1. <a id="why-not-ydotool">Why cannot we just use ydotool to send keys to emacs?</a>
    <br/>Tools like ydotool seem to be able to send key events only to the
@@ -394,6 +402,12 @@ to resize them, reposition them etc.
    [ewm](https://github.com/laluxx/ewm/)
    and many other packages allow you to manage **Emacs windows**.
    - dwin is about managing Emacs external, **desktop windows**.
+
+7. **[eaf - the emacs application framework](https://github.com/emacs-eaf/emacs-application-framework)**
+  embeds Qt applications via X11 reparenting into Emacs.
+  - 👍 Like EXWM, it allows to handle external applications inside Emacs, via buffers.
+  - 👎 It requires work per application to embed, it cannot embed all applications (like EXWM does). 
+  - 👎 It works only for X11, not for Wayland.
 
 ## <a id="extensions">5. How to Customize and to Extend 🧩</a>
 1. Adding commands to `dwin-grab`:
