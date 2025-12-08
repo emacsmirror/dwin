@@ -1,4 +1,5 @@
 
+-include Makefile-experimental
 
 TESTDIR=/tmp/test-dwin/
 TESTDIR28=/tmp/test-dwin-emacs28/
@@ -46,8 +47,23 @@ dev-emacs:
 preview:
 	cd .. && go-grip -p 8100 README.md
 
+
+check-pre-commit:
+	cd .. && pre-commit run --all-files
+
 check-melpazoid:
 	rm -fr $(TEST_PACKAGE_DIR)
 	./bin-dev/cp-nonignored-git-files $(PACKAGE_DIR) $(TEST_PACKAGE_DIR)
 	RECIPE='(dwin :fetcher github :repo "lsth/dwin" :files (:defaults "etc/bin" "etc/_local-share-applications"))' \
         LOCAL_REPO="$(TEST_PACKAGE_DIR)" make -C "$(MELPAZOID_DIR)"
+
+
+install-pre-commit:
+	pipx install pre-commit
+
+install-lychee:
+	cargo install lychee
+
+install-melpazoid:
+	mkdir -p ~/local/system/misc/
+	git -C ~/local/system/misc/ clone https://github.com/riscy/melpazoid.git

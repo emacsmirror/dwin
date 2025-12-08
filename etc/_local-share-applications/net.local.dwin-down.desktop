@@ -1,9 +1,10 @@
 [Desktop Entry]
-Exec=dwin-down
+Exec=_emacs-key "M-<down>"
 Name=switch to down window (kwin or emacs)
 NoDisplay=true
 StartupNotify=false
 Type=Application
 X-KDE-GlobalAccel-CommandShortcut=true
+X-KDE-Shortcuts=Alt+Down
 X-License=GPL-3.0-or-later
 # SPDX-License-Identifier: GPL-3.0-or-later

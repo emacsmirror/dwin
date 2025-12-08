@@ -1,9 +1,10 @@
 [Desktop Entry]
-Exec=dwin-left
+Exec=_emacs-key "M-<left>"
 Name=switch to left window (kwin or emacs)
 NoDisplay=true
 StartupNotify=false
 Type=Application
 X-KDE-GlobalAccel-CommandShortcut=true
+X-KDE-Shortcuts=Alt+Left
 X-License=GPL-3.0-or-later
 # SPDX-License-Identifier: GPL-3.0-or-later

@@ -1,9 +1,10 @@
 [Desktop Entry]
-Exec=dwin-firefox
+Exec=_emacs-key "<F11>"
 Name=start/activate/toggle firefox
 NoDisplay=true
 StartupNotify=false
 Type=Application
 X-KDE-GlobalAccel-CommandShortcut=true
+X-KDE-Shortcuts=F11
 X-License=GPL-3.0-or-later
 # SPDX-License-Identifier: GPL-3.0-or-later

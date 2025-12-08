@@ -6,7 +6,7 @@ repos:
       # ------------------------
       - id: elisp-byte-compile
         name: Byte-compile ELisp files
-        entry: emacs --batch -Q -f batch-byte-compile
+        entry: emacs --batch -Q --eval "(add-to-list 'load-path default-directory)" -f batch-byte-compile
         language: system
         files: \.el$
         exclude: ^etc/(example-emacs-inits|dev-emacs-init|tests|snippets)

@@ -3,9 +3,27 @@
 ## 0.2.1 (work in progress, unreleased)
 ### 🚀 highlights
 ### ✨ new features & enhancements
+
+- On KDE/KWin dwin configures desktop global keys now automatically,
+  manual adding shortcuts in KDE System Settings / Shortcuts is no longer
+  needed.
+- The _emacs-key script is installed automatically.
+- For KDE/KWin, the key binding now is stored in the application .desktop 
+  file directly, making modifying ~/.config/kglobalshortcutsrc superfluous; 
+  the respective example file has been removed.
+- Other scripts (kwin-left etc.) have been removed and _emacs-key is used
+  directly now.
+
 ### ❤️ community contributions
 ### 🐛 bugs fixed
+
+- Fast window switching sometimes triggers timing issues in kdotool,
+  that have been remedied by querying it again at least to some extent.
+
 ### 💥 breaking changes and deprecations
+
+- Code is now organized in three files: dwin-core.el, dwin-kwin.el and
+  dwin.el.
 
 ## 0.2.0 (2025-11-26)
 ### 🚀 highlights

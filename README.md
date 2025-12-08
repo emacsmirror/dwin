@@ -68,42 +68,23 @@ compositors.
 
 3. For 🔀 **directional navigation**, add to `use-package`:
    ```emacs-lisp
-		:config
-		(global-set-key (kbd "M-<left>") #'dwin-windmove-left)
-		(global-set-key (kbd "M-<right>") #'dwin-windmove-right)
-		(global-set-key (kbd "M-<up>") #'dwin-windmove-up)
-		(global-set-key (kbd "M-<down>") #'dwin-windmove-down))
+      :config
+	  (dwin-keymap-desktopglobal-set "M-<left>"  #'dwin-windmove-left)
+	  (dwin-keymap-desktopglobal-set "M-<right>" #'dwin-windmove-right)
+	  (dwin-keymap-desktopglobal-set "M-<up>"    #'dwin-windmove-up)
+	  (dwin-keymap-desktopglobal-set "M-<down>"  #'dwin-windmove-down)
 	```
-	In your window manager's shortcut settings, you have to configure the following global shortcuts: 
-	- `Alt-left` to `etc/bin/dwin-left`, 
-	- `Alt-right` to `etc/bin/dwin-right`, 
-	- `Alt-up` to `etc/bin/dwin-up`, and 
-	- `Alt-down` to `etc/bin/dwin-down`.
-    	
-	For KDE/KWin you can do this in ⚙️ KDE/System Settings/Shortcuts manually
-
-	(alternatively, you can
-	
-	- copy the contents of [etc/_config/kglobalshortcutsrc](etc/_config/kglobalshortcutsrc) at the end
-	  of your `~/.config/kglobalshortcutsrc` and
-	- the files [etc/_local-share-applications/*.desktop](etc/_local-share-applications/) into your
-	  `~/.local/share/applications` and then
-	- ask kwin to reload its config: `qdbus6 org.kde.KWin /KWin reconfigure`.)
-
-    Also ensure that [_emacs-key](etc/bin/_emacs-key) is on your PATH, e.g.,
-	by copying it to `~/bin` or `~/.local/bin` (if in your PATH).
-
 	Then with `M-<left>/<right>/<up>/<down>` you can move between Emacs
-	windows and between	desktop windows seamlessly.
+	windows and between desktop windows seamlessly. --- For window managers / compositors
+	other than KDE/KWin you have to use your window managers mechanism to define shortcuts
+	manually once per key, see 
+	[Further Details/Key Bindings](etc/further-details.md#key-bindings).
 
 4. For basic 🏷️ **named navigation**, add to `use-package`:
    ```emacs-lisp
        :config
-	   (global-set-key (kbd "C-<f11>") #'dwin-switch-to-emacs-or)
+       (dwin-keymap-desktopglobal-set "C-<f11>" #'dwin-switch-to-emacs-or)
    ```
-   In your window manager's shortcut settings, e.g., 
-   in ⚙️ KDE/System Settings/Shortcuts you have to add the shortcut key 
-   - `Ctrl-f11` to `etc/bin/dwin-emacs`.
    Then with 
    `M-x dwin-switch-to-app firefox` you can switch from emacs to firefox and with 
    `C-<f11>`  you can switch back from firefox to emacs.
@@ -117,10 +98,10 @@ compositors.
 | `r`         | raise window                                  |
 | `M`         | minimize window (there is no maximize window) |
 | `c`         | close window                                  |
-| `left`      | move window left                              |
-| `right`     | move window right                             |
-| `up`        | move window up                                |
-| `down`      | move window down                              |
+| `left`      | move to window on the left                    |
+| `right`     | move to window on the right                   |
+| `up`        | move to window above                          |
+| `down`      | move to window below                          |
 | `D<number>` | move window to desktop                        |
 | `+`         | resize window horizontally (increase)         |
 | `-`         | resize window horizontally (decrease)         |
@@ -136,19 +117,14 @@ compositors.
 	   (defun my/firefox (&optional prefix)
 		   (interactive (list current-prefix-arg))
 		   (dwin-switch-to-app "firefox" prefix))
-	   (global-set-key (kbd "<f11>") #'my/firefox)
+       (dwin-keymap-desktopglobal-set "<f11>" #'my/firefox)
 
 	   (defun my/zotero (&optional prefix)
 		   (interactive (list current-prefix-arg))
 		   (dwin-switch-to-app "zotero" prefix))
-	   (global-set-key (kbd "M-<f11>") #'my/zotero)
+       (dwin-keymap-desktopglobal-set "M-<f11>" #'my/zotero)
    ```
-   In your window manager's shortcut settings, e.g., 
-   in ⚙️ KDE/System Settings/Shortcuts you have to add shortcut keys 
-   - `f11` to `etc/bin/dwin-firefox`, and 
-   - `Alt-f11` to `etc/bin/dwin-zotero`.
-   
-   Then you can toggle with `<f11>` between firefox and emacs. 
+   Now you can toggle with `<f11>` between firefox and emacs. 
 
 3. 🏷️ **Named navigation** with apps with multiple windows:
 - Commands with different arguments count as different apps: `okular b.pdf` 
@@ -186,17 +162,18 @@ compositors.
 
 ## <a id="impl">3. How it is implemented 🛠️</a>
 dwin provides two types of navigation:
+
 1. 🏷️ navigation by name,
-   e.g., switching to firefox, zotero, back to emacs, and
+    e.g., switching to firefox, zotero, back to emacs, and
 2. 🔀 directional navigation,
    e.g., moving to the window to the right or below.
 
 That navigation works globally, also outside emacs, requires that
 the window manager forwards some keys globally to emacs;
 for KDE one can bind a one-line script that uses emacsclient
-to forward the key to emacs, using `dwin-input-key` defined in code sect. 1.
+to forward the key to emacs, using `dwin-input-key`.
 See `etc/bin/dwin-firefox` for an example. See 
-[Further Details / 1](#why-not-ydotool)
+[Further Details/Why Not Ydotool](etc/further-details.md#why-not-ydotool)
 for why we cannot use tools like [ydotool](https://github.com/ReimuNotMoe/ydotool) 
 for sending keys.
 
@@ -225,7 +202,6 @@ The KDE proxy uses
 <li>dbus calls to org.kde.kglobalaccel (KDE's shortcuts application)
    for directional navigation.</li>
 </ol>
-See code sect. 4.
 
 🏷️ Navigation by name is provided by `dwin-switch-to-app` that will
 <ol type="i">
@@ -251,17 +227,16 @@ It needs the same handling as the other apps above.
 By default, navigation by name will switch to the first window of an application,
 if it has several. You can use a prefix arg to switch to a specific one,
 e.g., `C-2 M-x my/firefox` or `C-2 <f11>` to switch to the second one. 
-See code sect. 5.
 
 For 🔀 directional navigation, we defined a short function
 `dwin-windmove-left` for each direction. The function tries to
 move inside emacs via `windmove`, and if this fails, uses the
 window manager to move out of emacs.
 The same method also uses the window manager to move
-directional from desktop windows. See code sect. 6.
+directional from desktop windows.
 
-Code sect. 7 contains function `dwin-grab` to ⧉ arrange desktop windows, i.e.,
-to resize them, reposition them etc. 
+⧉ Arranging desktop windows, e.g., to move them around, 
+to resize them, etc., is accomplished by function `dwin-grab`.
 
 ### Known Issues and Limitations:
 1. <a id="limit:help-for-global-keys">Requesting help for a **global** key binding with 
@@ -313,7 +288,7 @@ to resize them, reposition them etc.
     package manager.
 
 5. <a id="limit:older-emacs">Running dwin on somewhat older Emacs.</a>
-- dwin runs on Emacs from 29.1 onwards seamlessly.
+- dwin runs on Emacs from 29.1 onward seamlessly.
 - For Emacs 28.1 and 28.2 you need to add to your `use-package`
   (see [example init.el with package](etc/example-emacs-inits/03-dwin-via-package-emacs-before-29.1/init.el)
   and [example init.el with straight](etc/example-emacs-inits/04-dwin-via-straight-emacs-before-29.1/init.el)):
@@ -335,28 +310,6 @@ to resize them, reposition them etc.
   first Emacs process, not the second. The global keys never reach the second Emacs.
 - Likely one could fix this with not too much work, but it seems to be such a niche
   case that I do not plan to look into this.
-
-### Further details:
-1. <a id="why-not-ydotool">Why cannot we just use ydotool to send keys to emacs?</a>
-   <br/>Tools like ydotool seem to be able to send key events only to the
-   active/focused window and would be able only to implement the cases
-   where one wants to move from within emacs, not the cases where
-   one wants to move back to emacs from other applications (or
-   between other applications). One could reimplement dwin in
-   bash, then there is no need to input keys into emacs anymore.
-
-   Unfortunately sending dbus events to kwin from bash was unstable
-   for me: running
-     ```bash
-     qdbus6 org.kde.kglobalaccel /component/kwin \
-	 org.kde.kglobalaccel.Component invokeShortcut "Switch Window Left"
-	 ```
-   often (not always) yielded
-      ```
-     Cannot find org.kde.kglobalaccel.Component in object 
-	 /component/kwin at org.kde.kglobalaccel
-	 ```
-   This never happened when sending the same events from emacs.
 
 ## <a id="relatedwork">4. Delineation from Related Work 📚</a>
 

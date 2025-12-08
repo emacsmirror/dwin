@@ -1,9 +1,10 @@
 [Desktop Entry]
-Exec=dwin-emacs
+Exec=_emacs-key "C-<F11>"
 Name=start/activate/switch-buffer emacs
 NoDisplay=true
 StartupNotify=false
 Type=Application
 X-KDE-GlobalAccel-CommandShortcut=true
+X-KDE-Shortcuts=Ctrl+F11
 X-License=GPL-3.0-or-later
 # SPDX-License-Identifier: GPL-3.0-or-later

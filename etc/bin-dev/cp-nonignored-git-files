@@ -15,7 +15,10 @@ mkdir -p "$dst"
 
 # Copy tracked + untracked but not ignored files
 git -C "$src" ls-files --others --cached --exclude-standard -z | \
-while IFS= read -r -d '' file; do
-    mkdir -p "$dst/$(dirname "$file")"
-    cp "$src/$file" "$dst/$file"
+    while IFS= read -r -d '' file; do
+	srcfile="$src/$file"
+	if [ -f "$srcfile" ]; then   # skip deleted files
+	    mkdir -p "$dst/$(dirname "$file")"
+	    cp "$srcfile" "$dst/$file"
+	fi
 done

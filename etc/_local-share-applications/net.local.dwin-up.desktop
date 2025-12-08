@@ -1,9 +1,10 @@
 [Desktop Entry]
-Exec=dwin-up
+Exec=_emacs-key "M-<up>"
 Name=switch to up window (kwin or emacs)
 NoDisplay=true
 StartupNotify=false
 Type=Application
 X-KDE-GlobalAccel-CommandShortcut=true
+X-KDE-Shortcuts=Alt+Up
 X-License=GPL-3.0-or-later
 # SPDX-License-Identifier: GPL-3.0-or-later

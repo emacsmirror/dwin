@@ -27,43 +27,29 @@
 
   :config
   (dwin-setup)
+  ;; a. arrange desktop windows
+  ;; just use M-x dwin-grab. You can alias it to something shorter, e.g.
+  ;; (defalias #'win #'dwin-grab)
 
-  ;; a. directional navigation
-  (global-set-key (kbd "M-<left>")  #'dwin-windmove-left)
-  (global-set-key (kbd "M-<right>") #'dwin-windmove-right)
-  (global-set-key (kbd "M-<up>")    #'dwin-windmove-up)
-  (global-set-key (kbd "M-<down>")  #'dwin-windmove-down)
-  ;; Note: Also configure Alt+Arrow keys in KDE shortcuts
+  ;; b. directional navigation
+  (dwin-keymap-desktopglobal-set "M-<left>"  #'dwin-windmove-left)
+  (dwin-keymap-desktopglobal-set "M-<right>" #'dwin-windmove-right)
+  (dwin-keymap-desktopglobal-set "M-<up>"    #'dwin-windmove-up)
+  (dwin-keymap-desktopglobal-set "M-<down>"  #'dwin-windmove-down)
 
-  ;; b. named navigation
-  ;; b-1. move back to Emacs
-  (global-set-key (kbd "C-<f11>") #'dwin-switch-to-emacs-or)
+  ;; c. named navigation
+  ;; c.1 move back to emacs
+  (dwin-keymap-desktopglobal-set "C-<f11>" #'dwin-switch-to-emacs-or)
 
-  ;; b-2. Firefox
+  ;; c.2 firefox
   (defun my/firefox (&optional prefix)
     (interactive (list current-prefix-arg))
     (dwin-switch-to-app "firefox" prefix))
-  (global-set-key (kbd "<f11>") #'my/firefox)
+  (dwin-keymap-desktopglobal-set "<f11>" #'my/firefox)
 
-  ;; b-3. Zotero
+  ;; c.3 zotero
   (defun my/zotero (&optional prefix)
     (interactive (list current-prefix-arg))
     (dwin-switch-to-app "zotero" prefix))
-  (global-set-key (kbd "M-<f11>") #'my/zotero)
-
-  ;; c. Arrange desktop windows
-  ;; Use M-x dwin-grab or define an alias if desired
-  ;; (defalias #'win #'dwin-grab)
+  (dwin-keymap-desktopglobal-set "M-<f11>" #'my/zotero)
 )
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(package-selected-packages nil))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
